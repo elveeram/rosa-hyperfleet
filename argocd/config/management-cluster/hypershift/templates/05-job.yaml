@@ -75,7 +75,7 @@ spec:
             --oidc-storage-provider-s3-credentials /tmp/aws/oidc-creds \
             --external-dns-provider aws \
             --external-dns-domain-filter {{ .Values.hypershift.externalDns.domain }} \
-            --external-dns-secret external-dns \
+            --external-dns-credentials-secret external-dns \
             --external-dns-image {{ .Values.hypershift.externalDns.image }} \
 
           # TODO(hypershift): Upstream --aws-assume-role + Pod Identity support
