@@ -279,12 +279,6 @@ variable "environment_domain" {
   default     = null
 }
 
-variable "environment_hosted_zone_id" {
-  description = "Route53 hosted zone ID for the environment domain (e.g. the zone for int0.rosa.devshift.net) in the central account. Used to create NS delegation records for the regional zone. When null, delegation must be done externally."
-  type        = string
-  default     = null
-}
-
 # =============================================================================
 # API Gateway Method Settings Variables
 # =============================================================================
@@ -490,6 +484,18 @@ variable "zoa_runner_source_image" {
   description = "Source registry image for ZOA Runner (K8s pulls directly, no ECR mirror). Override together with zoa_runner_image_tag to point at a fork or CI registry."
   type        = string
   default     = "quay.io/rrp-dev-ci/zoa-runner"
+}
+
+variable "worker_node_ami_id" {
+  description = "Custom AMI ID for the Karpenter bootstrap managed node group. Empty (default) uses the EKS-optimized AL2023 AMI. When set, the node group switches to a CUSTOM AMI and the launch template supplies nodeadm bootstrap user_data (assumes a nodeadm-compatible image, e.g. RHEL/AL2023)."
+  type        = string
+  default     = ""
+}
+
+variable "worker_node_root_volume_size" {
+  description = "Root EBS volume size (GiB) for the Karpenter bootstrap nodes."
+  type        = number
+  default     = 50
 }
 
 # =============================================================================

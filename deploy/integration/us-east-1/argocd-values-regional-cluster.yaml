@@ -9,7 +9,15 @@ eksNodePool:
   instanceFamilies:
   - m8i
   - m7i
+  ami:
+    family: AL2023
+    id: ami-08534dafc055ff299
+  rootVolumeSize: 50Gi
 baseDomain: us-east-1.int0.rosa.devshift.net
+platformApi:
+  app:
+    args:
+      defaultClusterExpiration: 24h
 hyperfleet:
   oidcS3Bucket: PLACEHOLDER-overridden-by-terraform-output
 pagerduty:

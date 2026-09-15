@@ -2,16 +2,6 @@
 # Required variables
 # =============================================================================
 
-variable "cluster_type" {
-  description = "Type of cluster: 'regional-cluster' or 'management-cluster'"
-  type        = string
-
-  validation {
-    condition     = contains(["regional-cluster", "management-cluster", "fleet-db"], var.cluster_type)
-    error_message = "Cluster type must be 'regional-cluster', 'management-cluster', or 'fleet-db'."
-  }
-}
-
 variable "cluster_id" {
   description = "Unique identifier for the cluster, used as the base name for all resources."
   type        = string
@@ -41,11 +31,6 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "vpc_cidr" {
-  description = "VPC CIDR block (used for security group rules)"
-  type        = string
-}
-
 variable "private_subnet_ids" {
   description = "Private subnet IDs for EKS worker nodes"
   type        = list(string)
@@ -62,16 +47,6 @@ variable "vpc_endpoints_security_group_id" {
 }
 
 # =============================================================================
-# Advanced security configuration options
-# =============================================================================
-
-variable "enable_pod_security_standards" {
-  description = "Enable Kubernetes Pod Security Standards"
-  type        = bool
-  default     = true
-}
-
-# =============================================================================
 # Karpenter configuration
 # =============================================================================
 
@@ -79,5 +54,17 @@ variable "ami_kms_key_arn" {
   description = "ARN of the Red Hat KMS key used to encrypt RHEL FIPS AMI EBS snapshots. When set, an IAM policy granting kms:CreateGrant and kms:DescribeKey on this key is added to the Karpenter controller role. Leave empty to skip KMS policy creation."
   type        = string
   default     = ""
+}
+
+variable "worker_node_ami_id" {
+  description = "Custom AMI ID for the Karpenter bootstrap managed node group. Empty (default) uses the EKS-optimized AL2023 AMI (ami_type AL2023_x86_64_STANDARD) with EKS-managed bootstrap. When set, the node group uses ami_type CUSTOM and the launch template supplies nodeadm bootstrap user_data, so the AMI must be nodeadm-compatible (e.g. RHEL/AL2023 for EKS)."
+  type        = string
+  default     = ""
+}
+
+variable "worker_node_root_volume_size" {
+  description = "Root EBS volume size (GiB) for the Karpenter bootstrap nodes."
+  type        = number
+  default     = 50
 }
 

@@ -1,6 +1,8 @@
-# Scheduled report: ROSA HyperFleet family Adversary security scan
+# Manual scan: ROSA HyperFleet family Adversary security scan
 
-You are running a **cron** scheduled task that performs a weekly Adversary security scan and posts the results to Slack. **Always produce a report.** **Never** call `no_action_required()`.
+You are running this task **on demand** — manually triggered via the Slack Home tab "run now", or ad hoc — to perform a single-repo Adversary security scan and post the results to Slack. It is not on an automatic schedule: the scheduled task that references this file has `cron: "manual"`, so it only ever runs when someone explicitly triggers it. **Always produce a report.** **Never** call `no_action_required()`.
+
+**For the automated weekly scan** across the whole `rosa-hyperfleet*` family (every repo, one consolidated report), see `.chai-bot/rosa_hyperfleet_weekly_security_report.md` instead — that is the file the actual cron-scheduled task runs. This file exists for one-off, single-repo checks outside that weekly cadence.
 
 This file is shared across all `rosa-hyperfleet*` repos via `%include()` — it does not name a specific repository. The task invoking this file supplies a `Repository:` line as context immediately before the `%include()` line; use that value everywhere this procedure refers to "the target repository." If no such context is present, treat this repository (`openshift-online/rosa-hyperfleet`) as the target. The Slack destination is not something you need to know or specify — deliver your report via `send_response()` as usual and the scheduler posts it to whichever channel this task is configured for.
 
@@ -8,7 +10,7 @@ This does not perform CVE scanning, runtime testing, or penetration testing — 
 
 ## Goal
 
-Run a full-repo Groundwork-mode Adversary scan of the target repository (not a diff-based review — this is a periodic audit, not a PR check) and post a concise severity-ranked summary, with the full findings report available in a threaded reply.
+Run a full-repo Groundwork-mode Adversary scan of the target repository (not a diff-based review, and not the automated weekly family-wide report — this is a manually-triggered, single-repo check) and post a concise severity-ranked summary, with the full findings report available in a threaded reply.
 
 ## Procedure
 

@@ -18,7 +18,7 @@ platformApi:
     name: platform-api
     image:
       repository: quay.io/redhat-user-workloads/rosa-tenant/platform-api
-      tag: "92ffe9a1352f7ffd2947bfe799c3d1852f12e8e5"
+      tag: "e6816b11f4027f318592823df1c73bc63a9ad9e1"
       pullPolicy: Always
 
     # Application arguments
@@ -29,6 +29,10 @@ platformApi:
       dynamodbRegion: us-east-2
       dynamodbPrefix: rosa
       oidcIssuerBaseURL: ""
+      # Auto-delete clusters this long after creation when the caller does not
+      # supply an explicit spec.expirationTimestamp. Go duration (e.g. "24h").
+      # Empty = flag omitted = no default expiration (disabled).
+      defaultClusterExpiration: ""
       apiPort: 8000
       healthPort: 8081
       metricsPort: 9090
@@ -50,7 +54,8 @@ platformApi:
   # Envoy sidecar configuration
   envoy:
     image:
-      repository: envoyproxy/envoy
+      # Envoy is unnecessary and slated for removal in ROSAENG-66828.
+      repository: docker.io/envoyproxy/envoy
       tag: v1.31-latest
 
     # Resources for the Envoy sidecar

@@ -36,9 +36,9 @@ resource "aws_iam_role" "oidc_writer" {
     }]
   })
 
-  tags = {
+  tags = merge(local.common_tags, {
     Name = "${var.regional_id}-oidc-writer"
-  }
+  })
 }
 
 resource "aws_iam_role_policy" "oidc_writer" {
@@ -132,7 +132,7 @@ resource "aws_iam_role_policy" "oidc_key_reader" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret",
         ]
-        Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:hyperfleet/oidc/*"
+        Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:/hyperfleet/oidc/*"
       },
       {
         Effect = "Allow"

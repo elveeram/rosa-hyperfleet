@@ -19,12 +19,15 @@ provider "aws" {
   }
 
   default_tags {
-    tags = {
-      app-code      = var.app_code
-      service-phase = var.service_phase
-      cost-center   = var.cost_center
-      environment   = var.environment
-    }
+    tags = merge(
+      {
+        app-code      = var.app_code
+        service-phase = var.service_phase
+        cost-center   = var.cost_center
+        environment   = var.environment
+      },
+      var.eph_prefix != "" ? { ephemeral-prefix = var.eph_prefix } : {}
+    )
   }
 }
 
@@ -92,6 +95,8 @@ resource "aws_iam_role" "external_secrets_operator" {
 
   tags = {
     Name      = "${var.regional_id}-external-secrets-operator-role"
+    function  = "cluster-infra"
+    module    = "regional-cluster"
     ManagedBy = "terraform"
   }
 }
@@ -149,6 +154,8 @@ resource "aws_eks_pod_identity_association" "external_secrets_operator" {
 
   tags = {
     Name      = "${var.regional_id}-external-secrets-operator-pod-identity"
+    function  = "cluster-infra"
+    module    = "regional-cluster"
     ManagedBy = "terraform"
   }
 }
@@ -171,13 +178,14 @@ module "regional_cluster" {
   source = "../../modules/eks-cluster"
 
   # Required variables
-  cluster_type                    = "regional-cluster"
   cluster_id                      = var.regional_id
   vpc_id                          = module.vpc.vpc_id
-  vpc_cidr                        = module.vpc.vpc_cidr
   private_subnet_ids              = module.vpc.private_subnet_ids
   cluster_security_group_id       = module.vpc.cluster_security_group_id
   vpc_endpoints_security_group_id = module.vpc.vpc_endpoints_security_group_id
+
+  worker_node_ami_id           = var.worker_node_ami_id
+  worker_node_root_volume_size = var.worker_node_root_volume_size
 }
 
 # =============================================================================
@@ -231,7 +239,6 @@ module "bastion" {
 
   cluster_id                = var.regional_id
   cluster_name              = module.regional_cluster.cluster_name
-  cluster_endpoint          = module.regional_cluster.cluster_endpoint
   cluster_security_group_id = module.vpc.cluster_security_group_id
   vpc_id                    = module.vpc.vpc_id
   private_subnet_ids        = module.vpc.private_subnet_ids
@@ -337,7 +344,9 @@ resource "aws_route53_zone" "regional" {
   name = "${var.deployment_name}.${var.environment_domain}"
 
   tags = {
-    Name = "${var.deployment_name}.${var.environment_domain}"
+    Name     = "${var.deployment_name}.${var.environment_domain}"
+    function = "dns"
+    module   = "regional-cluster"
   }
 }
 
@@ -377,8 +386,10 @@ resource "aws_route53_zone" "zone_shard" {
   name = "${count.index}.${var.deployment_name}.${var.environment_domain}"
 
   tags = {
-    Name  = "${count.index}.${var.deployment_name}.${var.environment_domain}"
-    Shard = tostring(count.index)
+    Name     = "${count.index}.${var.deployment_name}.${var.environment_domain}"
+    Shard    = tostring(count.index)
+    function = "dns"
+    module   = "regional-cluster"
   }
 }
 
@@ -452,7 +463,8 @@ module "zoa_lambda" {
   count  = var.zoa_lambda_image_tag != "" ? 1 : 0
   source = "../../modules/zoa-lambda"
 
-  cluster_id = var.regional_id
+  cluster_id        = var.regional_id
+  deployment_target = "rc"
 
   lambda_image_uri = module.zoa.lambda_image_uri
   job_image_uri    = module.zoa.runner_image_uri
@@ -549,6 +561,8 @@ resource "aws_iam_role" "hyperfleet_operator" {
   tags = {
     Name      = "${var.regional_id}-hyperfleet-operator-role"
     Component = "hyperfleet-operator"
+    function  = "messaging"
+    module    = "regional-cluster"
     ManagedBy = "terraform"
   }
 }
@@ -562,6 +576,8 @@ resource "aws_eks_pod_identity_association" "hyperfleet_operator" {
   tags = {
     Name      = "${var.regional_id}-hyperfleet-operator-pod-identity"
     Component = "hyperfleet-operator"
+    function  = "messaging"
+    module    = "regional-cluster"
     ManagedBy = "terraform"
   }
 }
@@ -622,7 +638,7 @@ resource "aws_iam_role_policy" "hyperfleet_operator_secrets" {
           "secretsmanager:DescribeSecret",
           "secretsmanager:DeleteSecret",
         ]
-        Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:hyperfleet/oidc/*"
+        Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:/hyperfleet/oidc/*"
       },
     ]
   })
@@ -641,6 +657,7 @@ resource "aws_iam_role_policy" "hyperfleet_operator_assume_role" {
         Effect = "Allow"
         Action = [
           "sts:AssumeRole",
+          "sts:TagSession",
         ]
         Resource = "arn:aws:iam::*:role/*"
         Condition = {

@@ -102,6 +102,7 @@ Zones created by HyperShift CPO in the customer account (not delegated from shar
 
 **Hyperfleet-operator responsibilities:**
 
+- Create and reconcile `DNSReservation` CRs to reserve DNS prefixes within zone shards. Each reservation lives in the account namespace (`account-<accountID>`) for isolation, and global uniqueness of the prefix within its shard is guaranteed by a corresponding `Index` resource in the shard's uniqueness namespace (`dns-shard-<id>-reservations`). Reservations are decoupled from cluster names — a `DNSReservation` can exist before a cluster claims it (e.g. for shared-VPC flows).
 - Monitor capacity and manage zone shard allocation (zone placement decision)
 - Propagate the selected zone shard to HyperShift Operator via the HostedCluster CR spec
 
@@ -121,7 +122,7 @@ Zones created by HyperShift CPO in the customer account (not delegated from shar
 | :---------------- | :-------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------- | :------------------------------------------------------------------------- |
 | `deployment_name` | 1–25 characters | Subdomain for a regional deployment. Defaults to the AWS region name; suffixed when multiple deployments share a region or for per-run CI environments. | Service            | `us-east-1` (len 9), `us-east-1-2` (len 12), `us-east-1-eph-a1b2` (len 19) |
 | `zone_shard`      | 1–3 characters  | Subdomain for a regional deployment's HostedZone shard (capped at 100)                                                                                  | Service            | `0` (len 1), `99` (len 2)                                                  |
-| `hash4`           | 4 characters    | Unique slug per `cluster_alias` within a zone shard; derived from cluster UUID, uniqueness enforced by platform-api at creation time                    | Service            | `1fb9` (len 4)                                                             |
+| `hash4`           | 4 characters    | Unique slug per `cluster_alias` within a zone shard; allocated via `DNSReservation`/`Index` CRDs which guarantee uniqueness within the shard            | Service            | `1fb9` (len 4)                                                             |
 | `cluster_alias`   | 1–15 characters | Alias for the cluster: user-provided (`domain_prefix`) or service-generated hash                                                                        | Service / Customer | `typeidhcp` (len 10), `4354c27df47cf4e` (len 15)                           |
 
 All identifiers must be DNS-subdomain compatible: lowercase alphanumeric characters or `-`, starting and ending with an alphanumeric character.

@@ -249,6 +249,8 @@ Scheduled CI/documentation tasks run via Chai Bot. Schedules are defined in `.ch
 
 **Docs update** detects stale documentation across the three repos and creates PRs to fix it, using the `documentation-updater` agent for validation.
 
+**Adversary scan** runs a weekly Groundwork-mode security scan of each repo using the `adversary` agent and posts severity-ranked findings to Slack. This is static/adversarial analysis, not CVE scanning.
+
 ### Important Files and Patterns
 
 - `Makefile` - Standardized provisioning commands

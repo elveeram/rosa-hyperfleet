@@ -14,12 +14,15 @@ provider "aws" {
   }
 
   default_tags {
-    tags = {
-      app-code      = var.app_code
-      service-phase = var.service_phase
-      cost-center   = var.cost_center
-      environment   = var.environment
-    }
+    tags = merge(
+      {
+        app-code      = var.app_code
+        service-phase = var.service_phase
+        cost-center   = var.cost_center
+        environment   = var.environment
+      },
+      var.eph_prefix != "" ? { ephemeral-prefix = var.eph_prefix } : {}
+    )
   }
 }
 
@@ -42,13 +45,14 @@ module "management_cluster" {
   source = "../../modules/eks-cluster"
 
   # Required variables
-  cluster_type                    = "management-cluster"
   cluster_id                      = var.management_id
   vpc_id                          = module.vpc.vpc_id
-  vpc_cidr                        = module.vpc.vpc_cidr
   private_subnet_ids              = module.vpc.private_subnet_ids
   cluster_security_group_id       = module.vpc.cluster_security_group_id
   vpc_endpoints_security_group_id = module.vpc.vpc_endpoints_security_group_id
+
+  worker_node_ami_id           = var.worker_node_ami_id
+  worker_node_root_volume_size = var.worker_node_root_volume_size
 }
 
 # =============================================================================
@@ -95,7 +99,6 @@ module "bastion" {
 
   cluster_id                = var.management_id
   cluster_name              = module.management_cluster.cluster_name
-  cluster_endpoint          = module.management_cluster.cluster_endpoint
   cluster_security_group_id = module.vpc.cluster_security_group_id
   vpc_id                    = module.vpc.vpc_id
   private_subnet_ids        = module.vpc.private_subnet_ids
@@ -110,7 +113,8 @@ module "zoa_lambda" {
   count  = var.zoa_lambda_ecr_url != "" ? 1 : 0
   source = "../../modules/zoa-lambda"
 
-  cluster_id = var.management_id
+  cluster_id        = var.management_id
+  deployment_target = "mc"
 
   lambda_image_uri = "${var.zoa_lambda_ecr_url}:${var.zoa_lambda_image_tag}"
   job_image_uri    = "${var.zoa_runner_source_image}:${var.zoa_runner_image_tag}"

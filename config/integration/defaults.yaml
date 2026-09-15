@@ -2,6 +2,17 @@ dns:
   domain: int0.rosa.devshift.net
   create_environment_zone: true
 
+# Pin a specific AMI for all worker nodes (RC + MC), covering both the Karpenter
+# EC2NodeClass and the Terraform bootstrap node group. ami-08534dafc055ff299 is a
+# RHEL EKS image bootstrapped via nodeadm. amiFamily AL2023: Karpenter generates
+# the nodeadm NodeConfig itself, including apiServerEndpoint, certificateAuthority,
+# and cidr. The image is nodeadm-compatible, so the AL2023-family bootstrap works
+# on RHEL. (A name-only Custom NodeConfig fails: nodeadm hard-fails validation with
+# "Apiserver endpoint is missing" rather than resolving it via eks:DescribeCluster.)
+worker_node_ami:
+  family: AL2023
+  id: ami-08534dafc055ff299
+
 regional_cluster:
   enable_bastion: true
   enable_cloudtrail: true
@@ -16,6 +27,9 @@ regional_cluster:
   sre_argocd_oidc_client_id: "rrp-argocd-sre-int-us-east-1"
   sre_prometheus_oidc_client_id: "rrp-prometheus-sre-int-us-east-1"
   sre_thanos_oidc_client_id: "rrp-thanos-sre-int-us-east-1"
+
+cluster_lifecycle:
+  default_expiration: "24h"
 
 management_cluster_defaults:
   enable_bastion: true

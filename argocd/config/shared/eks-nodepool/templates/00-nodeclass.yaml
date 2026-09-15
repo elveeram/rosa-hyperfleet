@@ -2,7 +2,7 @@
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
-  name: bottlerocket-fips
+  name: workloads
   annotations:
     # Karpenter CRD may not exist yet when ArgoCD dry-runs this resource
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
@@ -25,3 +25,46 @@ spec:
   metadataOptions:
     httpTokens: required
     httpPutResponseHopLimit: 2
+  {{- if .Values.eksNodePool.ami }}
+  # BIFROST-1420 workaround: rhel-bootc-eks bakes a signature-enforcing policy for
+  # registry.redhat.io/redhat/*, which rejects the unsigned partner OLM catalog
+  # index images (certified/community/marketplace), so their catalog pods stay in
+  # Init:ImagePullBackOff. On amiFamily AL2023 Karpenter merges its generated
+  # NodeConfig with this MIME doc, so we ship only a shellscript that adds per-repo
+  # overrides for those three indexes; all other enforcement (incl. the signed
+  # redhat-operator-index) is untouched. Remove when BIFROST-1420 lands.
+  userData: |
+    MIME-Version: 1.0
+    Content-Type: multipart/mixed; boundary="//"
+
+    --//
+    Content-Type: text/x-shellscript
+
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 - <<'PY'
+    import json
+    p = "/etc/containers/policy.json"
+    d = json.load(open(p))
+    d.setdefault("transports", {}).setdefault("docker", {})
+    for r in ("registry.redhat.io/redhat/certified-operator-index",
+              "registry.redhat.io/redhat/community-operator-index",
+              "registry.redhat.io/redhat/redhat-marketplace-index"):
+        d["transports"]["docker"][r] = [{"type": "insecureAcceptAnything"}]
+    json.dump(d, open(p, "w"), indent=2)
+    PY
+    systemctl restart crio 2>/dev/null || true
+    --//--
+  # A pinned custom AMI roots at /dev/sda1, not the AL2023 default /dev/xvda, so
+  # set the root mapping explicitly (mirrors the Terraform bootstrap launch
+  # template in the eks-cluster module). Without it Karpenter sizes the wrong
+  # device and the root stays at the AMI's baked-in size.
+  blockDeviceMappings:
+    - deviceName: /dev/sda1
+      rootVolume: true
+      ebs:
+        volumeSize: {{ .Values.eksNodePool.rootVolumeSize | default "50Gi" }}
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+  {{- end }}

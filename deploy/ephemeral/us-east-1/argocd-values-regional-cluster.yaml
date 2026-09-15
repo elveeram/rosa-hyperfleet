@@ -9,7 +9,15 @@ eksNodePool:
   instanceFamilies:
   - m8i-flex
   - m7i-flex
+  ami:
+    family: AL2023
+    id: ami-08534dafc055ff299
+  rootVolumeSize: 50Gi
 baseDomain: us-east-1.dev0.rosa.devshift.net
+platformApi:
+  app:
+    args:
+      defaultClusterExpiration: ''
 hyperfleet:
   oidcS3Bucket: hypershift--regional-oidc-ssm:///infra/ephemeral/us-east-1/account_id
 pagerduty:
