@@ -43,6 +43,77 @@ To add a new machine type, create a YAML file in `ci/nightly-overrides/machine-t
 
 Component repos (e.g., `rosa-hyperfleet-api`) can run the e2e test suite against an ephemeral environment with their PR-built image deployed. See [Enabling Pre-Merge E2E for Component Repos](../docs/adding-component-pre-merge.md) for the full workflow, architecture, and SOP for onboarding new repos.
 
+## Client Testing (Planned)
+
+The e2e test runner (`ci/e2e-tests.sh`) validates cluster lifecycle through two CLI clients. Infrastructure provisioning via Terraform is validated separately in pre-submit checks.
+
+### ROSACTL CLI (`make test-e2e-cli`)
+
+Tests the HyperFleet-native CLI (`rosactl`) built from `rosa-hyperfleet-cli`. The CLI binary is cloned and built from `CLI_REPO`/`CLI_REF` before the test run. Runtime: ~30-35 min.
+
+Tests are ordered by Ginkgo labels and executed in this sequence:
+
+| Phase     | Label            | What it does                                                                       |
+| --------- | ---------------- | ---------------------------------------------------------------------------------- |
+| `setup`   | `help`           | Verifies `rosactl --help` output                                                   |
+| `setup`   | `login`          | Logs in to the Platform API (`rosactl login --url`)                                |
+| `setup`   | `vpc-create`     | Creates cluster VPC via CloudFormation (VPC, subnets, NAT/IGW, security groups)    |
+| `setup`   | `vpc-list`       | Lists VPCs and verifies the created one appears                                    |
+| `setup`   | `iam-create`     | Creates operator IAM roles via CloudFormation (8 operator roles + worker role)      |
+| `setup`   | `iam-list`       | Lists IAM stacks and verifies the created one appears                              |
+| `setup`   | `account-add`    | Registers the customer AWS account with the Platform API                           |
+| `create`  | `hcp-create`     | Creates an HCP cluster via the Platform API                                        |
+| `setup`   | `oidc-create`    | Creates a managed OIDC config                                                      |
+| `monitor` | `cluster-status` | Polls `/clusters/{id}` until `status.phase` is non-empty, then waits for `Ready`   |
+| `monitor` | `kubeconfig`     | Generates a kubeconfig and verifies API server connectivity                        |
+| `monitor` | `nodepool-create`| Creates an additional nodepool via CLI                                              |
+| `monitor` | `nodepool-list`  | Lists nodepools and verifies both default and created pools appear                 |
+| `monitor` | `dns-verify`     | Validates DNS resolution and TLS certificate for the KAS endpoint                  |
+| `monitor` | `nodepools-wait` | Waits for all nodepools to report ready                                            |
+| `monitor` | `hcp-metrics`    | Queries Thanos for `hcp:hostedcluster_available` metric                            |
+| `cleanup` | `nodepool-delete`| Deletes the extra nodepool                                                         |
+| `cleanup` | `hcp-delete`     | Deletes the HCP cluster                                                            |
+| `cleanup` | `cluster-query`  | Polls until the cluster is fully deleted                                           |
+| `cleanup` | `oidc-delete`    | Deletes the OIDC config                                                            |
+| `cleanup` | `vpc-delete`     | Deletes the VPC CloudFormation stack                                               |
+| `cleanup` | `iam-delete`     | Deletes the IAM CloudFormation stack                                               |
+
+`DeferCleanup` handlers fire on failure to prevent resource leaks. A `PRE_CLEANUP_HOOK` collects environment logs to S3 before HCP deletion so the HCP namespace is captured in diagnostics.
+
+### ROSA CLI (`make test-e2e-rosa-cli`)
+
+To enable ROSA CLI tests in CI, set `E2E_SKIP_ROSA_CLI=false` in the job's environment variables.
+Tests the upstream `rosa` CLI's HyperFleet integration by cloning `openshift/rosa` at the `hyperfleet-v2` branch. Gated by `ROSA_LABEL_FILTER` (e.g. `hyperfleet-sanity`) and `ROSA_TEST_PROFILE`. Uses `credential_process` auto-refresh to avoid STS TTL expiry during long runs. Runtime: ~25-30 min.
+
+The `hyperfleet-sanity` test exercises the following sequence:
+
+1. **Login and verification** — `rosa login --hyperfleet-url`, `rosa whoami --output json` (verifies V2 API URL and region)
+2. **VPC and networking** — Creates VPC, public/private subnets, Internet Gateway, NAT Gateway, route tables, worker security group, and a private hosted zone for PrivateLink DNS
+3. **OIDC config** — `rosa create oidc-config --managed` and `rosa list oidc-config`; verifies the IAM OIDC provider exists in the customer account
+4. **Operator roles** — `rosa create operator-roles --hosted-cp` creates 8 roles (ingress, cloud-controller-manager, ebs-csi, image-registry, network-config, control-plane-operator, node-pool-management, worker) with federated trust policies
+5. **Cluster creation** — `rosa create cluster` with subnet and OIDC config binding; `rosa describe cluster --output json` to fetch cluster ID
+6. **Readiness polling** — Waits for cluster state to become `Ready` via the hyperfleet API client (not CLI polling)
+7. **Cleanup** — Deletes cluster (`rosa delete cluster`), operator roles (`rosa delete operator-roles`), OIDC config (`rosa delete oidc-config`), hosted zone records, security groups, route tables, NAT Gateway, EIP, Internet Gateway, subnets, and VPC
+
+### Terraform Tests
+
+TODO
+
+### Parallel Execution
+
+The ROSACTL CLI and ROSA CLI suites can run in parallel since they create clusters with independent names and do not share state.
+
+On trying to execute the 2 tests to run in parallel there were issues when running in background via the shell script
+   - The `cluster-status` test can fail with an empty `status.phase` after 30 seconds when the hyperfleet-operator's adapter reconciliation never starts.
+
+## Possible solutions
+
+In order to run tests in parallel using prow, the ci-operator config in [openshift/release](https://github.com/openshift/release)
+
+1. The file `ci-operator/config/openshift-online/rosa-hyperfleet-api/openshift-online-rosa-hyperfleet-api-main.yaml` to be updated with 2 jobs running simultaneously triggered by a cron job on prow.
+
+3. Create 2 separate scripts and then maybe in the shell script (ci-operator/step-registry/rosa-hyperfleet/e2e/rosa-hyperfleet-e2e-commands.sh) in the release repo could run the shell scripts in background. The only other thing is to make sure if the logs are captured correctly.
+
 ## Build Image
 
 The CI image is built from [ci/Containerfile](ci/Containerfile) and includes all required tools:
